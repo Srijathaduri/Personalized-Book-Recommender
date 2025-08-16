@@ -114,9 +114,9 @@ if st.sidebar.button("Recommend Me"):
                 st.text(book_recommend[col_idx][1])
 
 # --- Raw data for inspection ---
-books_df   = pd.read_csv(r"C:\Users\shiva\OneDrive\Desktop\PersonalizeBookRecomender\Books.csv")
-users_df   = pd.read_csv(r"C:\Users\shiva\OneDrive\Desktop\PersonalizeBookRecomender\Users.csv")
-ratings_df = pd.read_csv(r"C:\Users\shiva\OneDrive\Desktop\PersonalizeBookRecomender\Ratings.csv")
+books_df   = pd.read_csv("Books.csv")
+users_df   = pd.read_csv("Users.csv")
+ratings_df = pd.read_csv("Ratings.csv")
 
 st.sidebar.title("Data Used")
 
