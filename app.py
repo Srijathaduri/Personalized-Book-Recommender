@@ -1,23 +1,32 @@
-# import the libraries 
-import streamlit as st 
-import pickle 
-import numpy as np 
-import pandas as pd 
+# --- Import Libraries ---
+import streamlit as st
+import pickle
+import numpy as np
+import pandas as pd
 
+# --- Page Setup ---
 st.set_page_config(layout="wide")
-
 st.header("📚 Book Recommender System")
 
-st.markdown('''
-##### The site using collaborative filtering suggests books from our catalog. 
-##### We recommend top 50 books for everyone as well. 
-''')
+st.markdown("""
+##### 🔍 This site uses collaborative filtering to suggest books.  
+##### 📖 You can also explore the **Top 50 Books** in our dataset.  
+""")
 
-# --- Load pickled models/datasets ---
-popular = pickle.load(open('popular.pkl','rb'))
-books = pickle.load(open('books.pkl','rb'))
-pt = pickle.load(open('pt.pkl','rb'))
-similarity_scores = pickle.load(open('similarity_scores.pkl','rb')) 
+# --- Cache Helpers ---
+@st.cache_data
+def load_pickle(filename):
+    return pickle.load(open(filename, "rb"))
+
+@st.cache_data
+def load_csv(filename):
+    return pd.read_csv(filename, low_memory=False)
+
+# --- Load Pickled Data ---
+popular = load_pickle("popular.pkl")
+books = load_pickle("books.pkl")
+pt = load_pickle("pt.pkl")
+similarity_scores = load_pickle("similarity_scores.pkl")
 
 # --- Helpers to detect correct columns ---
 def get_col(df, keyword):
@@ -26,26 +35,22 @@ def get_col(df, keyword):
             return col
     return None
 
-# Detect column names dynamically (with fallback)
+# Detect column names dynamically
 popular_img_col   = get_col(popular, "image")
 books_img_col     = get_col(books, "image")
 
-# Force fallback to Book-Crossing dataset defaults
+# Fallbacks for Book-Crossing dataset defaults
 if not popular_img_col:
-    if "Image-URL-M" in popular.columns:
-        popular_img_col = "Image-URL-M"
-    elif "Image-URL-L" in popular.columns:
-        popular_img_col = "Image-URL-L"
-    elif "Image-URL-S" in popular.columns:
-        popular_img_col = "Image-URL-S"
+    for fallback in ["Image-URL-M", "Image-URL-L", "Image-URL-S"]:
+        if fallback in popular.columns:
+            popular_img_col = fallback
+            break
 
 if not books_img_col:
-    if "Image-URL-M" in books.columns:
-        books_img_col = "Image-URL-M"
-    elif "Image-URL-L" in books.columns:
-        books_img_col = "Image-URL-L"
-    elif "Image-URL-S" in books.columns:
-        books_img_col = "Image-URL-S"
+    for fallback in ["Image-URL-M", "Image-URL-L", "Image-URL-S"]:
+        if fallback in books.columns:
+            books_img_col = fallback
+            break
 
 # Title & Author columns
 popular_title_col = get_col(popular, "title")
@@ -53,15 +58,15 @@ popular_author_col= get_col(popular, "author")
 books_title_col   = get_col(books, "title")
 books_author_col  = get_col(books, "author")
 
-# --- Top 50 Books section ---
-st.sidebar.title("Top 50 Books")
+# --- Top 50 Books Section ---
+st.sidebar.title("📊 Explore")
 
-if st.sidebar.button("SHOW"):
-    cols_per_row = 5 
-    num_rows = 10 
-    for row in range(num_rows): 
+if st.sidebar.button("Show Top 50 Books"):
+    cols_per_row = 5
+    num_rows = 10
+    for row in range(num_rows):
         cols = st.columns(cols_per_row)
-        for col in range(cols_per_row): 
+        for col in range(cols_per_row):
             book_idx = row * cols_per_row + col
             if book_idx < len(popular):
                 with cols[col]:
@@ -72,7 +77,7 @@ if st.sidebar.button("SHOW"):
                     if popular_author_col:
                         st.text(popular.iloc[book_idx][popular_author_col])
 
-# --- Function to recommend books ---
+# --- Recommend Books Function ---
 def recommend(book_name):
     index = np.where(pt.index == book_name)[0][0]
     similar_items = sorted(
@@ -80,50 +85,40 @@ def recommend(book_name):
         key=lambda x: x[1],
         reverse=True
     )[1:6]
-    
+
     data = []
     for i in similar_items:
-        item = []
         temp_df = books[books[books_title_col] == pt.index[i[0]]].drop_duplicates(books_title_col)
-        
-        item.extend(temp_df[books_title_col].values)
-        item.extend(temp_df[books_author_col].values)
-        
-        if books_img_col:
-            item.extend(temp_df[books_img_col].values)
-        else:
-            item.append("")  # empty if no image
-        data.append(item) 
+        if not temp_df.empty:
+            item = [
+                temp_df[books_title_col].values[0],
+                temp_df[books_author_col].values[0],
+                temp_df[books_img_col].values[0] if books_img_col else ""
+            ]
+            data.append(item)
     return data
 
-# --- Book suggestion section ---
-book_list = pt.index.values 
-
-st.sidebar.title("Similar Book Suggestions")
-selected_book = st.sidebar.selectbox("Select a book from the dropdown", book_list)
+# --- Similar Book Suggestions ---
+book_list = pt.index.values
+selected_book = st.sidebar.selectbox("🔎 Select a book to get recommendations", book_list)
 
 if st.sidebar.button("Recommend Me"):
     book_recommend = recommend(selected_book)
     cols = st.columns(5)
-    for col_idx in range(5):
+    for col_idx, book in enumerate(book_recommend):
         with cols[col_idx]:
-            if col_idx < len(book_recommend):
-                if book_recommend[col_idx][2] != "":
-                    st.image(book_recommend[col_idx][2], use_container_width=True)
-                st.text(book_recommend[col_idx][0])
-                st.text(book_recommend[col_idx][1])
+            if book[2] != "":
+                st.image(book[2], use_container_width=True)
+            st.text(book[0])  # title
+            st.text(book[1])  # author
 
-# --- Raw data for inspection ---
-books_df   = pd.read_csv("Books.csv")
-users_df   = pd.read_csv("Users.csv")
-ratings_df = pd.read_csv("Ratings.csv")
+# --- Show Dataset (On Demand) ---
+if st.sidebar.button("Show Raw Data"):
+    st.subheader("📕 Books Data")
+    st.dataframe(load_csv("Books.csv"))
 
-st.sidebar.title("Data Used")
+    st.subheader("⭐ Ratings Data")
+    st.dataframe(load_csv("Ratings.csv"))
 
-if st.sidebar.button("Show"):
-    st.subheader('This is the books data we used in our model')
-    st.dataframe(books_df)
-    st.subheader('This is the User ratings data we used in our model')
-    st.dataframe(ratings_df)
-    st.subheader('This is the user data we used in our model')
-    st.dataframe(users_df)
+    st.subheader("👤 Users Data")
+    st.dataframe(load_csv("Users.csv"))
